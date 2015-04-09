@@ -110,6 +110,7 @@ namespace CraigslistWatcher2
         static void ExecuteQuery(Query q)
         {
             string searchResults = DownloadPage(q.query);
+             
             if (searchResults != null)
             {
                 int countNew = 0;
@@ -212,6 +213,8 @@ namespace CraigslistWatcher2
                             else
                                 Console.WriteLine("No coordinates found");
                         }
+                        else
+                            break;
                     }
                     m = m.NextMatch();
                 }
@@ -242,6 +245,7 @@ namespace CraigslistWatcher2
             try
             {
                 WebRequest r = WebRequest.Create(url);
+                r.Timeout = 5000;
                 WebResponse resp = r.GetResponse();
                 using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
                 {
