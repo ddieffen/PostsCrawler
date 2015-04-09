@@ -14,10 +14,10 @@
     <Setting Name="smtpport" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">0</Value>
     </Setting>
-    <Setting Name="explored" Type="System.String" Scope="User">
+    <Setting Name="exploredPosts" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
-    <Setting Name="picexplored" Type="System.String" Scope="User">
+    <Setting Name="exploredImages" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
   </Settings>

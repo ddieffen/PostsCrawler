@@ -23,9 +23,9 @@ namespace CraigslistWatcher2
         {
             bool enableSSL = true;
 
-            if (attachements != null && attachements.Length > 0
-                && emailTo.Contains("@mailasail.com"))
-                emailTo = emailTo.Replace("@mailasail.com", "+attach@mailasail.com");
+            //if (attachements != null && attachements.Length > 0
+            //    && emailTo.Contains("@mailasail.com"))
+            //    emailTo = emailTo.Replace("@mailasail.com", "+attach@mailasail.com");
 
             using (MailMessage mail = new MailMessage())
             {

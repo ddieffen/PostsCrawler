@@ -74,24 +74,24 @@ namespace CraigslistWatcher2 {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
-        public string explored {
+        public string exploredPosts {
             get {
-                return ((string)(this["explored"]));
+                return ((string)(this["exploredPosts"]));
             }
             set {
-                this["explored"] = value;
+                this["exploredPosts"] = value;
             }
         }
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
-        public string picexplored {
+        public string exploredImages {
             get {
-                return ((string)(this["picexplored"]));
+                return ((string)(this["exploredImages"]));
             }
             set {
-                this["picexplored"] = value;
+                this["exploredImages"] = value;
             }
         }
     }
