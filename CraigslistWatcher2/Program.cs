@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -19,6 +20,7 @@ namespace CraigslistWatcher2
         static Regex regexReply = new Regex("id=\\\"replylink\\\" href=\\\"(\\/reply\\/chi\\/apa\\/[\\d]*)\\\"");
         static Regex regexMailTo = new Regex("mailto:[^\"]*");
         static Regex regexLargePicture = new Regex(@"http\:\/\/images.craigslist.org\/[a-z_0-9A-Z]*600x450.jpg");
+        static Regex regexSmallPicture = new Regex(@"http\:\/\/images.craigslist.org\/[a-z_0-9A-Z]*50x50c.jpg");
         static Regex regexTitle = new Regex(@"<title>(.*)<\/title>");
         static void Main(string[] args)
         {
@@ -83,10 +85,12 @@ namespace CraigslistWatcher2
             string visitedImages = "";
             foreach (Query q in queries)
             {
+                visitedPosts += ";" + q.Id + "|";
+                visitedImages += ";" + q.Id + "|";
                 foreach (string post in q.exploredPosts)
-                    visitedPosts += (q.Id.ToString() + "|" + post + ",");
+                    visitedPosts += (post + ",");
                 foreach (string image in q.exploredImages)
-                    visitedImages += (q.Id.ToString() + "|" + image + ",");
+                    visitedImages += (image + ",");
             }
             CraigslistWatcher2.Settings.Default.exploredPosts = visitedPosts;
             CraigslistWatcher2.Settings.Default.exploredImages = visitedImages;
@@ -109,7 +113,9 @@ namespace CraigslistWatcher2
 
         static void ExecuteQuery(Query q)
         {
-            string searchResults = DownloadPage(q.query);
+            string searchResults = "";
+            for (int i = 0; i < 1; i+=100)
+                searchResults += DownloadPage(q.query + "&s=" + i);
              
             if (searchResults != null)
             {
@@ -121,7 +127,7 @@ namespace CraigslistWatcher2
                 {
                     if (!exploredOnPage.Contains(m.Groups[0].Value))
                     {
-                        countTotal++;
+                        
                         exploredOnPage.Add(m.Groups[0].Value);
                         if (!q.exploredPosts.Contains(m.Groups[0].Value))
                         {
@@ -142,7 +148,7 @@ namespace CraigslistWatcher2
                                     && lon > q.leftLonE
                                     && lon < q.rightLonE)
                                 {
-                                    Match mi = regexLargePicture.Match(postPage);
+                                    Match mi = regexSmallPicture.Match(postPage);
                                     bool pictureMatchPrevious = false;
                                     List<string> exploredImageForThisPost = new List<string>();
                                     while (mi.Success)
@@ -153,34 +159,53 @@ namespace CraigslistWatcher2
                                             using (WebClient client = new WebClient())
                                             {
                                                 client.DownloadFile(mi.Groups[0].Value, localFilename);
-                                                Bitmap img = (Bitmap)FromFile(localFilename);
-
-                                                byte[] array = new byte[img.Width * img.Height];
+                                                Bitmap img = (Bitmap)FromFile(localFilename, new Size(8, 8));
+                                                byte[] BWarray = new byte[8*8];
                                                 int idx = 0;
+                                                int sum = 0;
                                                 for (int i = 0; i < img.Width; i++)
                                                 {
                                                     for (int j = 0; j < img.Height; j++)
                                                     {
                                                         Color c = img.GetPixel(i, j);
-                                                        byte gray = (byte)((c.R + c.G + c.B) / 3);
-                                                        array[idx] = gray;
+                                                        BWarray[idx] = (byte)((c.R + c.G + c.B) / 3);
+                                                        sum += BWarray[idx];
                                                         idx++;
                                                     }
                                                 }
+                                                int avg = sum / idx;
 
-                                                using (var md5 = MD5.Create())
+                                                bool[] boolArray = new bool[BWarray.Length];
+                                                for (int i = 0; i < BWarray.Length; i++)
+                                                    boolArray[i] = BWarray[i] > avg;
+                                                BitArray arr = new BitArray(boolArray);
+                                                byte[] data = new byte[arr.Length/8];
+                                                arr.CopyTo(data, 0);
+
+                                                string hash = string.Join(string.Empty, Array.ConvertAll(data, b => b.ToString("X2")));
+                                                int minDistance = int.MaxValue;
+                                                foreach (String hexaImage in q.exploredImages)
                                                 {
-                                                    md5.ComputeHash(array);
-                                                    string hash = ToHex(md5.Hash);
-                                                    if (!q.exploredImages.Contains(hash))
-                                                    {
-                                                        q.exploredImages.Add(hash);
-                                                        CraigslistWatcher2.Settings.Default.exploredImages += hash + ",";
-                                                        CraigslistWatcher2.Settings.Default.Save();
-                                                    }
-                                                    else
-                                                        pictureMatchPrevious = true;
+                                                    byte[] bytes =  Enumerable.Range(0, hexaImage.Length)
+                                                         .Where(x => x % 2 == 0)
+                                                         .Select(x => Convert.ToByte(hexaImage.Substring(x, 2), 16))
+                                                         .ToArray();
+                                                    BitArray bits = new BitArray(bytes);
+                                                    int dist = 0;
+                                                    for (int i = 0; i < bits.Length; i++)
+                                                        dist += (bits[i] == arr[i] ? 0 : 1);
+                                                    minDistance = (int)Math.Min(minDistance, dist);
                                                 }
+
+                                                if (minDistance > 1)
+                                                {
+                                                    q.exploredImages.Add(hash);
+                                                    CraigslistWatcher2.Settings.Default.exploredImages += hash + ",";
+                                                    CraigslistWatcher2.Settings.Default.Save();
+                                                }
+                                                else
+                                                    pictureMatchPrevious = true;
+                                                
                                                 exploredImageForThisPost.Add(localFilename);
                                                 File.Delete(localFilename);
                                             }
@@ -199,10 +224,10 @@ namespace CraigslistWatcher2
 
                                         Console.WriteLine("There is a new match:");
                                         Console.WriteLine("http://chicago.craigslist.org" + m.Groups[0].Value);
-                                        SMTPTools.SendMail(q.recipient, "MATCH! " + title, "I found a new match in the desired area."
-                                        + "See <a href=\"" + "http://chicago.craigslist.org" + m.Groups[0].Value + "\">" + "http://chicago.craigslist.org" + m.Groups[0].Value + "</a><br>"
-                                        + "<br><br><br>"
-                                        + "queryId=" + q.Id, true);
+                                        //SMTPTools.SendMail(q.recipient, "MATCH! " + title, "I found a new match in the desired area."
+                                        //+ "See <a href=\"" + "http://chicago.craigslist.org" + m.Groups[0].Value + "\">" + "http://chicago.craigslist.org" + m.Groups[0].Value + "</a><br>"
+                                        //+ "<br><br><br>"
+                                        //+ "queryId=" + q.Id, true);
                                     }
                                     else
                                         Console.WriteLine("Math has identical images, probably a duplicated post: http://chicago.craigslist.org" + m.Groups[0].Value);
@@ -215,6 +240,7 @@ namespace CraigslistWatcher2
                         }
                         else
                             break;
+                        countTotal++;
                     }
                     m = m.NextMatch();
                 }
@@ -222,11 +248,12 @@ namespace CraigslistWatcher2
             }
         }
 
-        static Image FromFile(string path)
+        static Image FromFile(string path, Size size)
         {
             var bytes = File.ReadAllBytes(path);
             var ms = new MemoryStream(bytes);
             var img = Image.FromStream(ms);
+            img = (Image)(new Bitmap(img, size));
             return img;
         }
 
