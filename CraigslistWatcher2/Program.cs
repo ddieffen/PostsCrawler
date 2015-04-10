@@ -25,7 +25,7 @@ namespace CraigslistWatcher2
         static void Main(string[] args)
         {
             Query q1 = new Query();
-            q1.query = "http://chicago.craigslist.org/search/chc/apa?maxAsk=1500&bedrooms=1";
+            q1.query = "http://chicago.craigslist.org/search/chc/apa?maxAsk=1500&bedrooms=1&hasPic=1";
             q1.topLatN = 41.9125;
             q1.bottomLatN = 41.8948;
             q1.rightLonE = -87.6000;
@@ -34,16 +34,17 @@ namespace CraigslistWatcher2
             q1.Id = new Guid("1d9beafd-4290-465f-adc8-2a2d83b43f33");
 
             Query q2 = new Query();
-            q2.query = "http://chicago.craigslist.org/search/apa?maxAsk=2800&bedrooms=2";
+            q2.query = "http://chicago.craigslist.org/search/apa?maxAsk=2800&bedrooms=2&hasPic=1";
             q2.topLatN = 41.9125;
             q2.bottomLatN = 41.8948;
             q2.rightLonE = -87.6000;
             q2.leftLonE = -87.6446;
             q2.recipient = "dominik.karbowski@gmail.com";
             q2.Id = new Guid("abb15e58-49ce-4df3-aef9-4218a636cc2d");
+            q2.enabled = false;
 
             Query q3 = new Query();
-            q3.query = "http://chicago.craigslist.org/search/chc/roo?maxAsk=800";
+            q3.query = "http://chicago.craigslist.org/search/chc/roo?maxAsk=800&hasPic=1";
             q3.topLatN = 41.926331;
             q3.bottomLatN = 41.891632;
             q3.rightLonE = -87.6000;
@@ -62,20 +63,22 @@ namespace CraigslistWatcher2
 
         private static void LoadExploredFromAppData(List<Query> queries)
         {
-            string[] pairs = CraigslistWatcher2.Settings.Default.exploredPosts.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] pairs = CraigslistWatcher2.Settings.Default.exploredPosts.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string str in pairs)
             {
-                string[] keyValue = str.Split('|');
-                Query selected = queries.Single(item => item.Id.ToString().Equals(keyValue[0]));
-                selected.exploredPosts.Add(keyValue[1]);
+                string[] keyValues = str.Split(new char[]{'|'}, StringSplitOptions.RemoveEmptyEntries);
+                string[] values = keyValues[1].Split(new char[]{','}, StringSplitOptions.RemoveEmptyEntries);
+                Query selected = queries.Single(item => item.Id.ToString().Equals(keyValues[0]));
+                selected.exploredPosts.AddRange(values);
             }
 
-            string[] pair = CraigslistWatcher2.Settings.Default.exploredImages.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            pairs = CraigslistWatcher2.Settings.Default.exploredImages.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string str in pairs)
             {
-                string[] keyValue = str.Split('|');
-                Query selected = queries.Single(item => item.Id.ToString().Equals(keyValue[0]));
-                selected.exploredImages.Add(keyValue[1]);
+                string[] keyValues = str.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                string[] values = keyValues[1].Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                Query selected = queries.Single(item => item.Id.ToString().Equals(keyValues[0]));
+                selected.exploredImages.AddRange(values);
             }
         }
 
@@ -99,15 +102,22 @@ namespace CraigslistWatcher2
 
         static void RunMainLoop(List<Query> queries)
         {
+            DateTime last = new DateTime(1970, 1, 1);
             while (true)
             {
-                foreach (Query q in queries)
-                { 
-                    ExecuteQuery(q);
-                }
+                DateTime now = DateTime.Now;
+                TimeSpan ts = now - last;
+                if (ts.Minutes >= 1)
+                {
+                    last = now;
+                    foreach (Query q in queries)
+                    {
+                        ExecuteQuery(q);
+                    }
 
-                SavedExploredToAppData(queries);
-                Thread.Sleep(1000 * 60);
+                    SavedExploredToAppData(queries);
+                }
+                Thread.Sleep(100);
             }
         }
 
@@ -207,7 +217,7 @@ namespace CraigslistWatcher2
                                                     pictureMatchPrevious = true;
                                                 
                                                 exploredImageForThisPost.Add(localFilename);
-                                                File.Delete(localFilename);
+                                                //File.Delete(localFilename);
                                             }
                                         }
                                         mi = mi.NextMatch();
@@ -215,19 +225,35 @@ namespace CraigslistWatcher2
 
                                     if (!pictureMatchPrevious)
                                     {
-                                        string title = "";
-                                        Match mt = regexTitle.Match(postPage);
-                                        if (mt.Success)
+                                        if (q.enabled)
                                         {
-                                            title = mt.Groups[1].Value;
-                                        }
+                                            string title = "";
+                                            Match mt = regexTitle.Match(postPage);
+                                            if (mt.Success)
+                                                title = mt.Groups[1].Value;
 
+                                            Match li = regexLargePicture.Match(postPage);
+                                            List<string> largeImages = new List<string>();
+                                            while (li.Success)
+                                            {
+                                                if (!largeImages.Contains(li.Groups[0].Value))
+                                                    largeImages.Add(li.Groups[0].Value);
+                                                li = li.NextMatch();
+                                            }
+
+                                            string body = "I found a new match in the desired area."
+                                            + "See <a href=\"" + "http://chicago.craigslist.org" + m.Groups[0].Value + "\">" + "http://chicago.craigslist.org" + m.Groups[0].Value + "</a><br>"
+                                            + "<br><br><br>";
+
+                                            foreach (string src in largeImages)
+                                                body += "<img src=\"" + src + "\" alt=\"craigslist image\" style=\"width:300px\"><br>";
+
+                                            body += "queryId=" + q.Id;
+                                            SMTPTools.SendMail(q.recipient, "MATCH! " + title, body, true);
+                                        }
                                         Console.WriteLine("There is a new match:");
                                         Console.WriteLine("http://chicago.craigslist.org" + m.Groups[0].Value);
-                                        //SMTPTools.SendMail(q.recipient, "MATCH! " + title, "I found a new match in the desired area."
-                                        //+ "See <a href=\"" + "http://chicago.craigslist.org" + m.Groups[0].Value + "\">" + "http://chicago.craigslist.org" + m.Groups[0].Value + "</a><br>"
-                                        //+ "<br><br><br>"
-                                        //+ "queryId=" + q.Id, true);
+                                        
                                     }
                                     else
                                         Console.WriteLine("Math has identical images, probably a duplicated post: http://chicago.craigslist.org" + m.Groups[0].Value);

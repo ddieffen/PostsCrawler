@@ -17,5 +17,6 @@ namespace CraigslistWatcher2
         public List<string> exploredPosts = new List<string>();
         public List<string> exploredImages = new List<string>();
         public string recipient = "";
+        public bool enabled = true;
     }
 }
