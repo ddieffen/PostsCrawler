@@ -26,11 +26,12 @@ namespace CraigslistWatcher2
         {
             Query q1 = new Query();
             q1.query = "http://chicago.craigslist.org/search/chc/apa?maxAsk=1500&bedrooms=1&hasPic=1";
-            q1.topLatN = 41.9125;
+            q1.topLatN = 41.920114;
             q1.bottomLatN = 41.8948;
             q1.rightLonE = -87.6000;
             q1.leftLonE = -87.6446;
-            q1.recipient = "ddieffen@gmail.com";
+            q1.emailRecipient = "ddieffen@gmail.com";
+            q1.textRecipient = "7739369876@tmomail.net";
             q1.Id = new Guid("1d9beafd-4290-465f-adc8-2a2d83b43f33");
 
             Query q2 = new Query();
@@ -39,7 +40,7 @@ namespace CraigslistWatcher2
             q2.bottomLatN = 41.8948;
             q2.rightLonE = -87.6000;
             q2.leftLonE = -87.6446;
-            q2.recipient = "dominik.karbowski@gmail.com";
+            q2.emailRecipient = "dominik.karbowski@gmail.com";
             q2.Id = new Guid("abb15e58-49ce-4df3-aef9-4218a636cc2d");
             q2.enabled = false;
 
@@ -49,8 +50,9 @@ namespace CraigslistWatcher2
             q3.bottomLatN = 41.891632;
             q3.rightLonE = -87.6000;
             q3.leftLonE = -87.719356;
-            q3.recipient = "ikoval@anl.gov";
+            q3.emailRecipient = "ikoval@anl.gov";
             q3.Id = new Guid("170E2366-0739-48F7-A314-92F79B48E1E6".ToLower());
+            q3.enabled = false;
         
             List<Query> queries = new List<Query> { q1, q2, q3 };
 
@@ -107,7 +109,7 @@ namespace CraigslistWatcher2
             {
                 DateTime now = DateTime.Now;
                 TimeSpan ts = now - last;
-                if (ts.Minutes >= 1)
+                if (ts.TotalMinutes >= 1)
                 {
                     last = now;
                     foreach (Query q in queries)
@@ -123,10 +125,12 @@ namespace CraigslistWatcher2
 
         static void ExecuteQuery(Query q)
         {
+            
             string searchResults = "";
-            for (int i = 0; i < 1; i+=100)
-                searchResults += DownloadPage(q.query + "&s=" + i);
-             
+            //for (int i = 0; i < 1; i+=100)
+            LogFile.Write("Quering:" + q.query);
+            searchResults += DownloadPage(q.query);// + "&s=" + i);
+            
             if (searchResults != null)
             {
                 int countNew = 0;
@@ -135,21 +139,23 @@ namespace CraigslistWatcher2
                 Match m = regexPost.Match(searchResults);
                 while (m.Success)
                 {
+                    LogFile.Write("Found Link: http://chicago.craigslist.org" + m.Groups[0].Value);
                     if (!exploredOnPage.Contains(m.Groups[0].Value))
                     {
-                        
                         exploredOnPage.Add(m.Groups[0].Value);
                         if (!q.exploredPosts.Contains(m.Groups[0].Value))
                         {
+                            q.newLinks++;
                             countNew++;
                             q.exploredPosts.Add(m.Groups[0].Value);
 
-                            Console.WriteLine(countNew + ") Found new URL for " + q.recipient + ", parsing for location...");
+                            Console.WriteLine(countNew + ") Found new URL for " + q.emailRecipient + ", parsing for location...");
                             string postPage = DownloadPage("http://chicago.craigslist.org" + m.Groups[0].Value);
                             Match mc = regexCoord.Match(postPage);
 
                             if (mc.Success)
                             {
+                                #region compare location, then images and send by email or text
                                 double lat = Convert.ToDouble(mc.Groups[1].Value);
                                 double lon = Convert.ToDouble(mc.Groups[2].Value);
 
@@ -158,19 +164,25 @@ namespace CraigslistWatcher2
                                     && lon > q.leftLonE
                                     && lon < q.rightLonE)
                                 {
+                                    #region compares images and send email/text
                                     Match mi = regexSmallPicture.Match(postPage);
-                                    bool pictureMatchPrevious = false;
+                                    
+                                    int totalPics = 0;
+                                    int matchedPics = 0;
                                     List<string> exploredImageForThisPost = new List<string>();
                                     while (mi.Success)
                                     {
                                         string localFilename = mi.Groups[0].Value.Replace("http://images.craigslist.org/", "");
                                         if (!exploredImageForThisPost.Contains(localFilename))
                                         {
+                                            totalPics++;
                                             using (WebClient client = new WebClient())
                                             {
+                                                int imgSize = 16;
+                                                #region download and compare image
                                                 client.DownloadFile(mi.Groups[0].Value, localFilename);
-                                                Bitmap img = (Bitmap)FromFile(localFilename, new Size(8, 8));
-                                                byte[] BWarray = new byte[8*8];
+                                                Bitmap img = (Bitmap)FromFile(localFilename, new Size(imgSize, imgSize));
+                                                byte[] BWarray = new byte[imgSize * imgSize];
                                                 int idx = 0;
                                                 int sum = 0;
                                                 for (int i = 0; i < img.Width; i++)
@@ -189,14 +201,14 @@ namespace CraigslistWatcher2
                                                 for (int i = 0; i < BWarray.Length; i++)
                                                     boolArray[i] = BWarray[i] > avg;
                                                 BitArray arr = new BitArray(boolArray);
-                                                byte[] data = new byte[arr.Length/8];
+                                                byte[] data = new byte[arr.Length / 8];
                                                 arr.CopyTo(data, 0);
 
                                                 string hash = string.Join(string.Empty, Array.ConvertAll(data, b => b.ToString("X2")));
                                                 int minDistance = int.MaxValue;
                                                 foreach (String hexaImage in q.exploredImages)
                                                 {
-                                                    byte[] bytes =  Enumerable.Range(0, hexaImage.Length)
+                                                    byte[] bytes = Enumerable.Range(0, hexaImage.Length)
                                                          .Where(x => x % 2 == 0)
                                                          .Select(x => Convert.ToByte(hexaImage.Substring(x, 2), 16))
                                                          .ToArray();
@@ -207,26 +219,30 @@ namespace CraigslistWatcher2
                                                     minDistance = (int)Math.Min(minDistance, dist);
                                                 }
 
-                                                if (minDistance > 1)
+                                                if (minDistance != 0)
                                                 {
                                                     q.exploredImages.Add(hash);
                                                     CraigslistWatcher2.Settings.Default.exploredImages += hash + ",";
                                                     CraigslistWatcher2.Settings.Default.Save();
                                                 }
                                                 else
-                                                    pictureMatchPrevious = true;
-                                                
+                                                {
+                                                    LogFile.Write("Picture match previous post:" + localFilename);
+                                                    matchedPics++;
+                                                }
                                                 exploredImageForThisPost.Add(localFilename);
                                                 //File.Delete(localFilename);
+                                                #endregion
                                             }
                                         }
                                         mi = mi.NextMatch();
                                     }
 
-                                    if (!pictureMatchPrevious)
+                                    if ((matchedPics/totalPics) <= 0.5) //less than 50% of the images were already scanned
                                     {
                                         if (q.enabled)
                                         {
+                                            #region creating email
                                             string title = "";
                                             Match mt = regexTitle.Match(postPage);
                                             if (mt.Success)
@@ -249,25 +265,58 @@ namespace CraigslistWatcher2
                                                 body += "<img src=\"" + src + "\" alt=\"craigslist image\" style=\"width:300px\"><br>";
 
                                             body += "queryId=" + q.Id;
-                                            SMTPTools.SendMail(q.recipient, "MATCH! " + title, body, true);
+                                            SMTPTools.SendMail(q.emailRecipient, "MATCH! " + title, body, true);
+                                            LogFile.Write("Mail sent");
+                                            #endregion
+
+                                            #region creating text message though smtp
+
+                                            if (!String.IsNullOrEmpty(q.textRecipient))
+                                            {
+                                                string textBody = "http://chicago.craigslist.org" + m.Groups[0].Value;
+                                                SMTPTools.SendMail(q.textRecipient, "MATCH! " + title, textBody, false);
+                                                LogFile.Write("Text message sent");
+                                            }
+
+                                            #endregion
                                         }
+                                        LogFile.Write("There is a new match:" + "http://chicago.craigslist.org" + m.Groups[0].Value);
                                         Console.WriteLine("There is a new match:");
                                         Console.WriteLine("http://chicago.craigslist.org" + m.Groups[0].Value);
-                                        
+                                        q.validatedAndSent++;
                                     }
                                     else
+                                    {
+                                        LogFile.Write("Found identical images, probably duplicated post");
                                         Console.WriteLine("Math has identical images, probably a duplicated post: http://chicago.craigslist.org" + m.Groups[0].Value);
+                                        q.duplicateImage++;
+                                    }
+                                    #endregion
                                 }
                                 else
+                                {
+                                    LogFile.Write("Located outside of desired area");
                                     Console.WriteLine("Located outside of desired area");
+                                    q.outsideArea++;
+                                }
+                                #endregion
                             }
                             else
+                            {
+                                LogFile.Write("No coordinates found");
                                 Console.WriteLine("No coordinates found");
+                                q.noLocation++;
+                            }
                         }
                         else
+                        {
+                            LogFile.Write("Link already explored during a previous query");
                             break;
+                        }
                         countTotal++;
                     }
+                    //else
+                        //LogFile.Write("Link already explored for this query response");
                     m = m.NextMatch();
                 }
                 Console.WriteLine(DateTime.Now.ToString() + " Total Links: " + countTotal + " New:" + countNew);

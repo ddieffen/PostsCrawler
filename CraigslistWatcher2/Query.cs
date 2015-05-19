@@ -16,7 +16,13 @@ namespace CraigslistWatcher2
         public double bottomLatN = 0;
         public List<string> exploredPosts = new List<string>();
         public List<string> exploredImages = new List<string>();
-        public string recipient = "";
+        public string emailRecipient = "";
+        public string textRecipient = "";
         public bool enabled = true;
+        public int newLinks = 0;
+        public int noLocation = 0;
+        public int outsideArea = 0;
+        public int duplicateImage = 0;
+        public int validatedAndSent = 0;
     }
 }
