@@ -7,6 +7,10 @@ using System.Threading.Tasks;
 
 namespace CraigslistWatcher2
 {
+    /// <summary>
+    /// This class is used to create a log file. In order to use it simply call LogFile.Write(string message)
+    /// It automatically creates a new log file every time the file size goes beyond 1MB
+    /// </summary>
     public static class LogFile
     {
         #region attributes

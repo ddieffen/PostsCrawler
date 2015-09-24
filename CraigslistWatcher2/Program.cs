@@ -13,27 +13,63 @@ using System.Threading.Tasks;
 
 namespace CraigslistWatcher2
 {
+    /// <summary>
+    /// Starting point Main is in that class
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// Regex to match postings in the page that lists all the postings
+        /// </summary>
         static Regex regexPost = new Regex("\\/[ch]*\\/[apro]*\\/[\\d]*\\.html");
+        /// <summary>
+        /// Regex to match the coordinates in a posting page that contains coordinates and a little map
+        /// </summary>
         static Regex regexCoord = new Regex("data-latitude=\"([\\d\\.]*)\" data-longitude=\"([\\d\\.\\-]*)\"");
+        /// <summary>
+        /// Regex to match the reply to information
+        /// </summary>
         static Regex regexReply = new Regex("id=\\\"replylink\\\" href=\\\"(\\/reply\\/chi\\/apa\\/[\\d]*)\\\"");
+        /// <summary>
+        /// Regex to extract an email link from a string
+        /// </summary>
         static Regex regexMailTo = new Regex("mailto:[^\"]*");
+        /// <summary>
+        /// Regex to match the location of the larger images used in the slideshow
+        /// </summary>
         static Regex regexLargePicture = new Regex(@"http\:\/\/images.craigslist.org\/[a-z_0-9A-Z]*600x450.jpg");
+        /// <summary>
+        /// Regex to match the location of the smaller version of the images used in the slideshow
+        /// </summary>
         static Regex regexSmallPicture = new Regex(@"http\:\/\/images.craigslist.org\/[a-z_0-9A-Z]*50x50c.jpg");
+        /// <summary>
+        /// Regex to match the title of the post in a posting page
+        /// </summary>
         static Regex regexTitle = new Regex(@"<title>(.*)<\/title>");
+
+        /// <summary>
+        /// Main routine, this is where the crawler should be called first
+        /// </summary>
+        /// <param name="args"></param>
         static void Main(string[] args)
         {
+            //Example query
+            //Look for Appartmens with 1 bedroom and with pics
             Query q1 = new Query();
             q1.query = "http://chicago.craigslist.org/search/chc/apa?maxAsk=1500&bedrooms=1&hasPic=1";
+            //defines the latitude and longitude rectangle for the search area
             q1.topLatN = 41.920114;
             q1.bottomLatN = 41.8948;
             q1.rightLonE = -87.6000;
             q1.leftLonE = -87.6446;
+            //recipient of that search
             q1.emailRecipient = "ddieffen@gmail.com";
+            //phone number to send a text message (feature offred from TMobile to their users)
             q1.textRecipient = "7739369876@tmomail.net";
+            //unique ID for that example query
             q1.Id = new Guid("1d9beafd-4290-465f-adc8-2a2d83b43f33");
 
+            //another query for someone else
             Query q2 = new Query();
             q2.query = "http://chicago.craigslist.org/search/apa?maxAsk=2800&bedrooms=2&hasPic=1";
             q2.topLatN = 41.9125;
@@ -44,6 +80,7 @@ namespace CraigslistWatcher2
             q2.Id = new Guid("abb15e58-49ce-4df3-aef9-4218a636cc2d");
             q2.enabled = false;
 
+            //another query for someone else
             Query q3 = new Query();
             q3.query = "http://chicago.craigslist.org/search/chc/roo?maxAsk=800&hasPic=1";
             q3.topLatN = 41.926331;
@@ -63,6 +100,12 @@ namespace CraigslistWatcher2
             RunMainLoop(queries);
         }
 
+        /// <summary>
+        /// Load all the links that have already been explored in the past
+        /// This is used in case the application is stopped then restarted later
+        /// Reloading that list help us not parsing similar postings from agencies that post many time for the same appartment with similarly looking pictures
+        /// </summary>
+        /// <param name="queries"></param>
         private static void LoadExploredFromAppData(List<Query> queries)
         {
             string[] pairs = CraigslistWatcher2.Settings.Default.exploredPosts.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
@@ -84,6 +127,11 @@ namespace CraigslistWatcher2
             }
         }
 
+        /// <summary>
+        /// Saves all the images hashes and all the links already explored
+        /// This is used when the application is closing so that we can reload that data later when the application is restarted
+        /// </summary>
+        /// <param name="queries"></param>
         private static void SavedExploredToAppData(List<Query> queries)
         {
             string visitedPosts = "";
@@ -102,6 +150,10 @@ namespace CraigslistWatcher2
             CraigslistWatcher2.Settings.Default.Save();
         }
 
+        /// <summary>
+        /// Main loop of the software, scan craigslist and executes queries at fixed interval (here 100ms)
+        /// </summary>
+        /// <param name="queries"></param>
         static void RunMainLoop(List<Query> queries)
         {
             DateTime last = new DateTime(1970, 1, 1);
@@ -123,6 +175,11 @@ namespace CraigslistWatcher2
             }
         }
 
+        /// <summary>
+        /// Executes one query on craigslist
+        /// Calls the page by using the query link, parse the HTML and see if the post matches the query
+        /// </summary>
+        /// <param name="q"></param>
         static void ExecuteQuery(Query q)
         {
             
@@ -323,6 +380,12 @@ namespace CraigslistWatcher2
             }
         }
 
+        /// <summary>
+        /// Crates instances of an image object from a file (like a jpg or png file)
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
         static Image FromFile(string path, Size size)
         {
             var bytes = File.ReadAllBytes(path);
@@ -332,6 +395,12 @@ namespace CraigslistWatcher2
             return img;
         }
 
+        /// <summary>
+        /// Creates a 'human readble' hexadecimal string from an array of bytes
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <param name="upperCase"></param>
+        /// <returns></returns>
         static string ToHex(byte[] bytes, bool upperCase = true)
         {
             StringBuilder result = new StringBuilder(bytes.Length * 2);
@@ -342,6 +411,11 @@ namespace CraigslistWatcher2
             return result.ToString();
         }
 
+        /// <summary>
+        /// Download the HMTL content from a webpage using a link
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
         static string DownloadPage(string url)
         {
             try

@@ -7,6 +7,11 @@ using System.Security;
 
 namespace CraigslistWatcher2
 {
+    /// <summary>
+    /// Used to encrypt/decrypt information
+    /// This is mainly used in that project in order to save the login/password information used to connect to the SMTP server to send email
+    /// That way the info is not stored in a clear text file. However it can easily be decrypted by the current windows user (assuming someone takes control of your windows user account)
+    /// </summary>
     internal static class SecurityTools
     {
         //http://msdn.microsoft.com/en-us/library/system.security.cryptography.dataprotectionscope(v=vs.100).aspx

@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 
 namespace CraigslistWatcher2
 {
+    /// <summary>
+    /// Query object used to store information about what we're looking for on craigslist
+    /// </summary>
     class Query
     {
         public Guid Id = Guid.NewGuid();

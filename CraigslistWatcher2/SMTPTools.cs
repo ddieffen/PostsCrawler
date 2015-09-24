@@ -12,6 +12,9 @@ using System.Net.Mime;
 
 namespace CraigslistWatcher2
 {
+    /// <summary>
+    /// Class used to send emails
+    /// </summary>
     internal static class SMTPTools
     {
         internal static void SendMail(
